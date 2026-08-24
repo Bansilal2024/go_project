@@ -1,0 +1,120 @@
+name: CI Pipeline
+
+on:
+  push:
+    branches:
+      - master
+
+  pull_request:
+    branches:
+      - master
+
+# Default permissions
+permissions:
+  contents: read
+
+jobs:
+
+  # ==========================================================
+  # 1. SONARQUBE CLOUD SCAN
+  # ==========================================================
+  sonarcloud-scan:
+
+    name: SonarQube Cloud Scan
+
+    runs-on: ubuntu-latest
+
+    # SONAR_TOKEN is stored in this GitHub Environment
+    environment: sonarqube
+
+    steps:
+
+      # Checkout source code
+      - name: Checkout Code
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      # Setup Go
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go-docker-app/go.mod
+          cache: true
+
+      # Download Go dependencies
+      - name: Download Go Dependencies
+        working-directory: go-docker-app
+        run: go mod download
+
+      # Run unit tests and generate coverage
+      - name: Run Tests with Coverage
+        working-directory: go-docker-app
+        run: |
+          go test -v -coverprofile=coverage.out ./...
+
+      # SonarQube Cloud scan
+      - name: SonarQube Cloud Scan
+        uses: SonarSource/sonarqube-scan-action@v7
+        with:
+          args: >
+            -Dsonar.projectBaseDir=go-docker-app
+            -Dsonar.qualitygate.wait=true
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+
+  # ==========================================================
+  # 2. DOCKER BUILD & PUSH
+  # ==========================================================
+  build-image:
+
+    name: Build and Push Docker Image
+
+    # Docker build starts only if SonarQube job succeeds
+    needs: sonarcloud-scan
+
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+
+      # Checkout source code
+      - name: Checkout Code
+        uses: actions/checkout@v6
+
+      # Setup Docker Buildx
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # Login to GitHub Container Registry
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Convert repository name to lowercase
+      - name: Set Docker Image Name
+        run: |
+          echo "IMAGE_NAME=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_ENV"
+
+      # Build and push Docker image
+      - name: Build and Push Docker Image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./go-docker-app
+          file: ./go-docker-app/Dockerfile
+          push: true
+
+          tags: |
+            ${{ env.IMAGE_NAME }}:latest
+            ${{ env.IMAGE_NAME }}:${{ github.sha }}
+
+          # Docker layer caching
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
