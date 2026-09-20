@@ -1,1 +1,1 @@
-# go_project
+# project_poc_go_service

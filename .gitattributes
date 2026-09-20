@@ -1,0 +1,32 @@
+# Use LF for text files
+* text=auto eol=lf
+
+# Go source files
+*.go text eol=lf
+
+# YAML files
+*.yml text eol=lf
+*.yaml text eol=lf
+
+# Shell scripts
+*.sh text eol=lf
+* text=auto eol=lf
+
+# Dockerfiles
+Dockerfile text eol=lf
+
+# GitHub Actions
+.github/workflows/* text eol=lf
+
+# Configuration files
+*.json text eol=lf
+*.properties text eol=lf
+*.env text eol=lf
+
+# Binary files
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.pdf binary
+*.zip binary
